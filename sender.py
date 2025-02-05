@@ -20,10 +20,10 @@ API_ID = os.getenv("API_ID")
 API_HASH = os.getenv("API_HASH")
 
 # 其他配置
-TARGET_GROUP = "https://t.me/hopper_global"
-TOPIC_ID = 3
-SESSIONS_DIR = "hecai"
-MESSAGES_FILE = "Hopper/Hopper_messages.csv"
+TARGET_GROUP = "https://t.me/GenesisProtocolOfficial"
+TOPIC_ID = 1
+SESSIONS_DIR = "genesisday2"
+MESSAGES_FILE = "MemeCoreCommunity/MemeCoreCommunity_messages.csv"
 
 # 读取消息数据
 df = pd.read_csv(MESSAGES_FILE)
@@ -32,14 +32,14 @@ messages = df.to_dict('records')
 # 表情符号列表用于reactions
 REACTION_EMOJIS = ['👍',  '🔥', '🎉', '🔥']
 
-# 添加代理列表配置
+# 代理列表
 PROXY_LIST = [
     {
-        'proxy_type': 'socks5',
-        'addr': '45.252.58.93',
-        'port': 6722,
-        'username': 'Maomaomao77',
-        'password': 'Maomaomao77'
+        'proxy_type': 'socks5',  # 添加代理类型
+        'addr': '31.131.167.47',
+        'port': 12324,
+        'username': '14a91e96097d5',
+        'password': 'e48a23adb8'
     }
 ]
 
@@ -208,20 +208,19 @@ async def send_message_by_type(client, channel, message_data, kwargs):
     elif message_type in ['video', 'photo', 'file']:
         # 从media_path中提取文件路径
         media_path = message_data['media_path'].replace('media/', '')
-        full_path = os.path.join("话术", "media", media_path)
+        full_path = os.path.join("MemeCoreCommunity", "media", media_path)
         print(f"发送媒体文件: {full_path}")
         await client.send_file(channel, full_path, **kwargs)
     
     elif message_type == 'sticker':
-        # 从message_content中提取sticker ID
+        # 从content中提取sticker ID
         sticker_id = message_data['message_content'].split()[1].strip('[]')
         print(f"发送sticker: {sticker_id}")
-        # 对于sticker，我们需要先获取sticker对象
-        stickers = await client.get_messages(channel, ids=[int(sticker_id)])
-        if stickers and stickers[0].sticker:
-            await client.send_file(channel, stickers[0].sticker, **kwargs)
-        else:
-            print(f"无法获取sticker: {sticker_id}")
+        # 直接使用sticker ID发送
+        try:
+            await client.send_file(channel, sticker_id, **kwargs)
+        except Exception as e:
+            print(f"发送sticker失败: {str(e)}")
     
     else:
         print(f"未知的消息类型: {message_type}")
@@ -258,7 +257,7 @@ async def main():
             
             for msg, client in zip(batch_messages, available_clients):
                 await process_action(client, msg, recent_messages, args.topic, topic_id)
-                wait_time = random.uniform(5, 15)
+                wait_time = random.uniform(5, 60)
                 print(f"等待 {wait_time:.1f} 秒后发送下一条消息...")
                 await asyncio.sleep(wait_time)
         

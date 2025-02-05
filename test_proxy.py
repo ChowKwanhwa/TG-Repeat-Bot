@@ -1,121 +1,96 @@
-import socket
-import socks
-import requests
-import time
-from typing import Dict, Tuple
+import os
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 import asyncio
+from telethon.network import ConnectionTcpMTProxyRandomizedIntermediate
+from telethon.errors import *
+from dotenv import load_dotenv
+
+# 加载环境变量
+load_dotenv()
 
 # Telegram API 凭证
-API_ID = 22453265
-API_HASH = "641c3fad1c94728381a70113c70cd52d"
+API_ID = os.getenv("API_ID")
+API_HASH = os.getenv("API_HASH")
 
-async def test_telegram_connection(proxy: Dict) -> bool:
-    """测试代理是否可以连接到 Telegram"""
+# MTProto代理配置
+PROXY_CONFIG = {
+    'server': '185.162.130.86',
+    'port': 10082,
+    'secret': 'RzWuVl6lEOR6COra4d9lRNW78Fm5'  # 合并两个密钥
+}
+
+def format_secret(secret):
+    """格式化MTProto密钥"""
+    # 移除所有空格
+    secret = secret.replace(' ', '')
+    
+    # 如果密钥以dd结尾，说明是直接密钥
+    if secret.endswith('dd'):
+        return secret
+    
+    # 否则添加dd后缀（表示随机填充）
+    return secret + 'dd'
+
+async def test_mtproto_proxy():
+    """测试MTProto代理连接"""
+    print(f"\n开始测试MTProto代理配置:")
+    print(f"服务器: {PROXY_CONFIG['server']}")
+    print(f"端口: {PROXY_CONFIG['port']}")
+    print(f"密钥长度: {len(PROXY_CONFIG['secret'])} 字符")
+    
+    # 格式化密钥
+    formatted_secret = format_secret(PROXY_CONFIG['secret'])
+    print(f"格式化后的密钥长度: {len(formatted_secret)} 字符")
+    
     try:
-        # 构建代理配置
-        proxy_config = {
-            'proxy_type': 'socks5',
-            'addr': proxy['addr'],
-            'port': proxy['port'],
-            'username': proxy.get('username'),
-            'password': proxy.get('password')
-        }
-
-        # 创建临时客户端
+        # 创建使用MTProto代理的客户端
         client = TelegramClient(
             StringSession(),
             API_ID,
             API_HASH,
-            proxy=proxy_config
+            connection=ConnectionTcpMTProxyRandomizedIntermediate,
+            proxy=(PROXY_CONFIG['server'], PROXY_CONFIG['port'], formatted_secret)
         )
 
-        # 尝试连接
+        print("\n正在连接到Telegram...")
         await client.connect()
-        is_connected = await client.is_user_authorized()
+        
+        if await client.is_user_authorized():
+            print("成功连接到Telegram（已授权）")
+        else:
+            print("成功连接到Telegram（未授权）")
+            
+        # 测试基本功能
+        print("正在获取Telegram服务器时间...")
+        time = await client.get_date()
+        print(f"Telegram服务器时间: {time}")
+        
         await client.disconnect()
+        print("测试完成，代理可用")
         return True
+        
+    except ConnectionError as e:
+        print("\n连接错误:")
+        print(f"错误类型: {type(e).__name__}")
+        print(f"错误信息: {str(e)}")
+        if "proxy closed the connection" in str(e).lower():
+            print("\n可能的原因:")
+            print("1. 代理服务器已关闭或不可用")
+            print("2. 密钥格式不正确")
+            print("3. 代理服务器拒绝连接（可能是因为密钥错误）")
+        return False
+    except ProxyConnectionError as e:
+        print("\n代理连接错误:")
+        print(f"错误类型: {type(e).__name__}")
+        print(f"错误信息: {str(e)}")
+        return False
     except Exception as e:
-        print(f"Telegram 连接测试失败: {str(e)}")
+        print(f"\n其他错误:")
+        print(f"错误类型: {type(e).__name__}")
+        print(f"错误信息: {str(e)}")
         return False
 
-def test_proxy(proxy: Dict) -> Tuple[bool, float, bool]:
-    """测试代理并返回可用性、速度和 Telegram 连接状态"""
-    print(f"\n开始测试代理: {proxy['addr']}:{proxy['port']}")
-    
-    try:
-        # 构建代理URL
-        proxy_url = f"socks5://{proxy['username']}:{proxy['password']}@{proxy['addr']}:{proxy['port']}" \
-            if proxy.get('username') and proxy.get('password') \
-            else f"socks5://{proxy['addr']}:{proxy['port']}"
-        
-        proxies = {
-            'http': proxy_url,
-            'https': proxy_url
-        }
-        print(f"代理设置: {proxy_url}")
-
-        # 测试网站列表 - 只测试 Telegram 相关
-        test_urls = [
-            'https://api.telegram.org',
-            'https://web.telegram.org'
-        ]
-        
-        start_time = time.time()
-        for url in test_urls:
-            try:
-                print(f"\n尝试访问: {url}")
-                response = requests.get(
-                    url, 
-                    proxies=proxies,
-                    timeout=15,  # 增加超时时间
-                    verify=False
-                )
-                
-                if response.status_code == 200:
-                    print(f"成功访问 {url}")
-                else:
-                    print(f"访问 {url} 失败，状态码: {response.status_code}")
-                    continue  # 继续测试其他URL，而不是直接返回失败
-                    
-            except Exception as e:
-                print(f"访问 {url} 失败: {str(e)}")
-                continue  # 继续测试其他URL
-
-        elapsed_time = time.time() - start_time
-        
-        # 测试 Telegram 客户端连接
-        print("\n测试 Telegram 客户端连接...")
-        telegram_result = asyncio.get_event_loop().run_until_complete(
-            test_telegram_connection(proxy)
-        )
-        
-        return True, elapsed_time, telegram_result
-
-    except Exception as e:
-        print(f"代理测试失败: {str(e)}")
-        return False, float('inf'), False
-
 if __name__ == "__main__":
-    # 测试代理示例
-    test_proxy_config = {
-        'addr': '119.42.39.170',
-        'port': 5798,
-        'username': 'Maomaomao77',
-        'password': 'Maomaomao77'
-    }
-    
-    # 禁用 SSL 警告
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    
-    # 测试代理
-    is_working, speed, telegram_ok = test_proxy(test_proxy_config)
-    
-    # 显示测试结果
-    print("\n测试结果:")
-    print(f"代理可用: {'是' if is_working else '否'}")
-    if is_working:
-        print(f"响应时间: {speed:.2f}秒")
-    print(f"Telegram 连接: {'成功' if telegram_ok else '失败'}") 
+    # 运行测试
+    asyncio.run(test_mtproto_proxy())

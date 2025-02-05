@@ -5,13 +5,14 @@ import asyncio
 from dotenv import load_dotenv
 
 # 代理配置
-PROXY = {
-    'proxy_type': 'socks5', # 或者 'http'，取决于代理类型
-    'addr': "119.42.39.170",
-    'port': 5798,
-    'username': 'Maomaomao77',
-    'password': 'Maomaomao77'
-}
+PROXY_LIST = [
+    {
+        'addr': '31.131.167.47',
+        'port': 12324,
+        'username': '14a91e96097d5',
+        'password': 'e48a23adb8'
+    }
+]
 
 # 加载环境变量
 load_dotenv()

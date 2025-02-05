@@ -1,107 +1,124 @@
-#生成session文件，保存到sessions目录下
-
-from telethon import TelegramClient
-from telethon.sessions import StringSession
-from telethon.errors import SessionPasswordNeededError
-from dotenv import load_dotenv
 import os
+import asyncio
+from telethon import TelegramClient, errors
+from dotenv import load_dotenv
+import sys
 
 # 加载环境变量
 load_dotenv()
 
-# 从环境变量获取配置
-api_id = int(os.getenv('API_ID'))
-api_hash = os.getenv('API_HASH')
+# 从环境变量获取API凭据
+API_ID = os.getenv("API_ID")
+API_HASH = os.getenv("API_HASH")
 
-# 代理列表配置
+# 会话目录
+SESSIONS_DIR = "genesisday2"
+
+# 代理列表
 PROXY_LIST = [
     {
-        'proxy_type': 'socks5',
-        'addr': '119.42.39.170',
-        'port': 5798,
-        'username': 'Maomaomao77',
-        'password': 'Maomaomao77'
-    }
+        'addr': '31.131.167.47',
+        'port': 12324,
+        'username': '14a91e96097d5',
+        'password': 'e48a23adb8'
+    },
 ]
 
-async def try_connect_with_proxy(phone, sessions_dir, proxy_config):
-    """尝试使用特定代理连接"""
-    session_file = os.path.join(sessions_dir, f"+{phone.replace('+', '')}.session")
-    
+async def try_connect_with_proxy(phone_number, proxy_config):
+    """尝试使用代理连接"""
     try:
         print(f"\n正在使用代理 {proxy_config['addr']}:{proxy_config['port']} 尝试连接...")
-        client = TelegramClient(session_file, api_id, api_hash, proxy=proxy_config)
+        
+        # 创建session文件路径，保留加号
+        phone = phone_number.replace(' ', '')  # 只移除空格，保留加号
+        session_path = os.path.join(SESSIONS_DIR, phone)
+        
+        # 确保会话目录存在
+        os.makedirs(SESSIONS_DIR, exist_ok=True)
+        
+        # 创建代理配置
+        proxy = {
+            'proxy_type': 'socks5',
+            'addr': proxy_config['addr'],
+            'port': proxy_config['port'],
+            'username': proxy_config['username'],
+            'password': proxy_config['password'],
+            'rdns': True
+        }
+        
+        # 创建客户端
+        client = TelegramClient(
+            session_path,
+            API_ID,
+            API_HASH,
+            proxy=proxy
+        )
         
         # 启动客户端并等待验证码
         await client.connect()
-        if not await client.is_user_authorized():
-            print(f"\n正在发送验证码到 {phone}...")
-            await client.send_code_request(phone)
-            code = input(f"请输入发送到 {phone} 的验证码: ")
-            try:
-                await client.sign_in(phone, code)
-            except SessionPasswordNeededError:
-                print("检测到两步验证，请输入两步验证密码...")
-                password = input("请输入两步验证密码: ")
-                await client.sign_in(password=password)
         
-        if await client.is_user_authorized():
-            print(f"[成功] Session 文件已成功创建: {session_file}")
-            me = await client.get_me()
-            print(f"[成功] 已登录账号: {me.first_name} (@{me.username})")
-            await client.disconnect()
-            return True
+        if not await client.is_user_authorized():
+            print(f"需要验证电话号码: {phone_number}")
             
+            try:
+                await client.send_code_request(phone_number)
+                verification_code = input("请输入收到的验证码: ")
+                
+                # 尝试使用验证码登录
+                try:
+                    await client.sign_in(phone_number, verification_code)
+                except errors.SessionPasswordNeededError:
+                    # 处理两步验证
+                    password = input("请输入两步验证密码: ")
+                    await client.sign_in(password=password)
+                
+                print(f"[成功] {phone_number} 验证成功!")
+                
+            except Exception as e:
+                print(f"[错误] 验证过程中出错: {str(e)}")
+                return None
+        else:
+            print(f"[成功] {phone_number} 已经验证过")
+        
+        return client
+        
     except Exception as e:
         print(f"[失败] 使用代理 {proxy_config['addr']} 时出错: {str(e)}")
-        try:
-            await client.disconnect()
-        except:
-            pass
-    
-    return False
+        return None
 
-async def process_phone(phone, sessions_dir):
-    """处理单个电话号码，尝试所有代理"""
+async def process_phone(phone_number):
+    """使用所有代理尝试处理一个电话号码"""
     for proxy in PROXY_LIST:
-        success = await try_connect_with_proxy(phone, sessions_dir, proxy)
-        if success:
+        client = await try_connect_with_proxy(phone_number, proxy)
+        if client:
+            await client.disconnect()
             return True
-    
-    print(f"\n[失败] {phone} 所有代理均连接失败!")
     return False
 
 async def main():
-    # 创建 sessions 目录（如果不存在）
-    sessions_dir = 'huahua'
-    os.makedirs(sessions_dir, exist_ok=True)
+    """主函数"""
+    # 确保会话目录存在
+    os.makedirs(SESSIONS_DIR, exist_ok=True)
     
     # 定义电话号码列表
     phone_numbers = [
-        '+17747038511',
-        '+17747038515',
-        '+17748008170',
-        '+17748008188',
-        '+17748121429',
-        '+17748126029',
-        '+17748131317',
-        '+17748478030',
-        '+17752497519',
-        '+17752498893',
+        '+17854171791',
+        '+17854171625',
+        '+17854171588',
+        '+17854171334',
+        '+17853239321',
+        '+17853239214',
+        '+17853068778',
+        '+17853068116',
+        '+17853022131'
     ]
     
     # 批量处理每个电话号码
-    for phone in phone_numbers:
-        print(f"\n开始处理电话号码: {phone}")
-        success = await process_phone(phone, sessions_dir)
-        
-        # 询问是否继续处理下一个号码
-        if phone != phone_numbers[-1]:  # 如果不是最后一个号码
-            continue_input = input("\n是否继续处理下一个号码？(y/n): ")
-            if continue_input.lower() != 'y':
-                print("停止处理剩余号码")
-                break
+    for phone_number in phone_numbers:
+        print(f"\n开始处理电话号码: {phone_number}")
+        success = await process_phone(phone_number)
+        if not success:
+            print(f"[失败] {phone_number} 所有代理均连接失败")
 
-if __name__ == '__main__':
-    import asyncio
+if __name__ == "__main__":
     asyncio.run(main())
