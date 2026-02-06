@@ -254,11 +254,24 @@ async def worker(group_key, config_item, args):
         messages = messages[:args.max_messages]
 
     # Initialize Clients
-    clients = await init_clients_for_group(session_folder, group_link)
-    if not clients:
+    raw_clients = await init_clients_for_group(session_folder, group_link)
+    if not raw_clients:
         print(f"[{group_key}] No active clients. Aborting.")
         return
-        
+    
+    # Cache user info
+    clients = [] # List of (client, me)
+    for c in raw_clients:
+        try:
+            me = await c.get_me()
+            clients.append((c, me))
+        except Exception as e:
+            print(f"[{group_key}] Error getting info for a client: {e}. Skipping.")
+    
+    if not clients:
+        print(f"[{group_key}] No healthy clients after check. Aborting.")
+        return
+
     print(f"[{group_key}] Active clients: {len(clients)}")
 
     # Loop configuration
@@ -272,7 +285,7 @@ async def worker(group_key, config_item, args):
         
         for i, msg_data in enumerate(messages):
             # Select client
-            client = random.choice(clients)
+            client, me = random.choice(clients)
             
             # Fetch recent to decide interaction (random reply etc) - Optional Feature from previous sender?
             # User requirement just says "send messages". Simplification: Just send.
@@ -285,7 +298,7 @@ async def worker(group_key, config_item, args):
             # If we want to reply to recent messages (simulating convo), we need to fetch history.
             # Let's keep it robust: Send to Topic.
             
-            me = await client.get_me()
+            # me = await client.get_me() # Cached
             # print(f"[{group_key}] Sending msg {i} via {me.first_name}...")
             
             success = await send_message_safe(client, group_link, msg_data, reply_to=reply_target, media_base_dir=media_base_dir)
