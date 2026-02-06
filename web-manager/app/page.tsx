@@ -25,8 +25,15 @@ interface Session {
   scanning?: boolean;
 }
 
+interface Folder {
+  name: string;
+  session_count: number;
+}
+
 export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [scanningAll, setScanningAll] = useState(false);
 
@@ -43,13 +50,31 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetchSessions(); // Auto-load on mount
+    fetchFolders();
   }, []);
 
-  const fetchSessions = async () => {
+  useEffect(() => {
+    fetchSessions(selectedFolder);
+  }, [selectedFolder]);
+
+  const fetchFolders = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/api/folders`);
+      setFolders(res.data);
+      // Auto-select first folder if available
+      if (res.data.length > 0 && !selectedFolder) {
+        setSelectedFolder(res.data[0].name);
+      }
+    } catch (err) {
+      console.error('Failed to fetch folders', err);
+    }
+  };
+
+  const fetchSessions = async (folder?: string) => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/api/sessions`);
+      const url = folder ? `${API_BASE}/api/sessions?folder=${encodeURIComponent(folder)}` : `${API_BASE}/api/sessions`;
+      const res = await axios.get(url);
       // Preserve existing info if re-fetching? Or just reset. Let's reset for now to be simple.
       // Or better: update listing but keep info if path matches.
       const newSessions: Session[] = res.data.map((s: any) => ({
@@ -142,22 +167,36 @@ export default function Home() {
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Session Manager</h1>
-          <button
-            onClick={fetchSessions}
-            disabled={loading}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? <ArrowPathIcon className="w-5 h-5 animate-spin mr-2" /> : <ArrowPathIcon className="w-5 h-5 mr-2" />}
-            Refresh List
-          </button>
-          <button
-            onClick={scanAllSessions}
-            disabled={loading || scanningAll}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 ml-2"
-          >
-            {scanningAll ? <ArrowPathIcon className="w-5 h-5 animate-spin mr-2" /> : <CheckCircleIcon className="w-5 h-5 mr-2" />}
-            Scan All
-          </button>
+          <div className="flex items-center gap-4">
+            <select
+              value={selectedFolder}
+              onChange={(e) => setSelectedFolder(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Folders</option>
+              {folders.map((folder) => (
+                <option key={folder.name} value={folder.name}>
+                  {folder.name} ({folder.session_count})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => fetchSessions(selectedFolder)}
+              disabled={loading}
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? <ArrowPathIcon className="w-5 h-5 animate-spin mr-2" /> : <ArrowPathIcon className="w-5 h-5 mr-2" />}
+              Refresh
+            </button>
+            <button
+              onClick={scanAllSessions}
+              disabled={loading || scanningAll}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            >
+              {scanningAll ? <ArrowPathIcon className="w-5 h-5 animate-spin mr-2" /> : <CheckCircleIcon className="w-5 h-5 mr-2" />}
+              Scan All
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl shadow overflow-hidden">

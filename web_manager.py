@@ -57,12 +57,38 @@ class SessionUpdate(BaseModel):
     username: Optional[str] = None
     about: Optional[str] = None
 
+@app.get("/api/folders")
+async def list_folders():
+    """List all folders in SESSIONS_DIR"""
+    folders = []
+    if os.path.exists(config.SESSIONS_DIR):
+        for item in os.listdir(config.SESSIONS_DIR):
+            item_path = os.path.join(config.SESSIONS_DIR, item)
+            if os.path.isdir(item_path):
+                # Count session files in this folder
+                session_count = len([f for f in os.listdir(item_path) if f.endswith('.session')])
+                folders.append({
+                    "name": item,
+                    "session_count": session_count
+                })
+    folders.sort(key=lambda x: x['name'])
+    return folders
+
 @app.get("/api/sessions")
-async def list_sessions():
-    """List all session files in SESSIONS_DIR (recursive-ish)"""
+async def list_sessions(folder: str = None):
+    """List all session files in SESSIONS_DIR, optionally filtered by folder"""
     sessions = []
     
-    for root, dirs, files in os.walk(config.SESSIONS_DIR):
+    # Determine which directory to scan
+    if folder:
+        scan_dir = os.path.join(config.SESSIONS_DIR, folder)
+    else:
+        scan_dir = config.SESSIONS_DIR
+    
+    if not os.path.exists(scan_dir):
+        return sessions
+    
+    for root, dirs, files in os.walk(scan_dir):
         for file in files:
             if file.endswith(".session"):
                 full_path = os.path.join(root, file)
